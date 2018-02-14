@@ -2,8 +2,6 @@ package sqlwrap
 
 import (
 	"context"
-	"database/sql"
-	"database/sql/driver"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,12 +9,11 @@ import (
 	sqlmock "gopkg.in/DATA-DOG/go-sqlmock.v1"
 )
 
-var sqlmockDriver driver.Driver
-
 func init() {
+	// sqlmock does not export its driver
 	db, _, _ := sqlmock.New()
 	defer db.Close()
-	sqlmockDriver = db.Driver()
+	Register("sqlmock", db.Driver())
 }
 
 // not thread safe test recorder
@@ -64,21 +61,16 @@ func TestDriver(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		t.Run(test.name, func(t *testing.T) {
-			r := &testRecorder{}
-
-			w := WrapDriver(sqlmockDriver, OperationMask(r, test.mask...))
-			require.NotNil(t, w)
-
-			sql.Register(test.name, w)
 
 			d, mock, err := sqlmock.NewWithDSN(test.name)
 			require.NoError(t, err)
 			defer d.Close()
 
-			db, err := sql.Open(test.name, test.name)
+			r := &testRecorder{}
+
+			db, err := OpenWrapped("sqlmock", test.name, OperationMask(r, test.mask...))
 			require.NoError(t, err)
 			require.NotNil(t, db)
-			require.Equal(t, w, db.Driver())
 			defer db.Close()
 
 			mock.ExpectBegin()
