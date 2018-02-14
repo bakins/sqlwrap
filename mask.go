@@ -12,27 +12,49 @@ func (n nullOperation) Finish(err error) {
 
 }
 
-// OperationMask returns an OperationStarter which wraps another OperationStarter.
+var allOperations = []SQLOperation{
+	OperationBeginTx,
+	OperationPrepareContext,
+	OperationExecContext,
+	OperationPing,
+	OperationQueryContext,
+	OperationCommit,
+	OperationRollback,
+	OperationStmtClose,
+	OperationStmtExecContext,
+	OperationStmtQueryContext,
+	OperationLastInsertId,
+	OperationRowsAffected,
+	OperationNext,
+}
+
+// OperationExclude returns an OperationStarter which wraps another OperationStarter.
 // This will pass along all SQLoperations except those listed
-func OperationMask(next OperationStarter, ops ...SQLOperation) *MaskStarter {
-	operations := map[SQLOperation]bool{
-		OperationBeginTx:          true,
-		OperationPrepareContext:   true,
-		OperationExecContext:      true,
-		OperationPing:             true,
-		OperationQueryContext:     true,
-		OperationCommit:           true,
-		OperationRollback:         true,
-		OperationStmtClose:        true,
-		OperationStmtExecContext:  true,
-		OperationStmtQueryContext: true,
-		OperationLastInsertId:     true,
-		OperationRowsAffected:     true,
-		OperationNext:             true,
+func OperationExclude(next OperationStarter, ops ...SQLOperation) *MaskStarter {
+	operations := make(map[SQLOperation]bool, len(allOperations))
+	for _, o := range allOperations {
+		operations[o] = true
 	}
 
 	for _, o := range ops {
 		operations[o] = false
+	}
+	return &MaskStarter{
+		operations: operations,
+		next:       next,
+	}
+}
+
+// OperationInclude returns an OperationStarter which wraps another OperationStarter.
+// This will pass along only the SQLoperations  listed
+func OperationInclude(next OperationStarter, ops ...SQLOperation) *MaskStarter {
+	operations := make(map[SQLOperation]bool, len(allOperations))
+	for _, o := range allOperations {
+		operations[o] = false
+	}
+
+	for _, o := range ops {
+		operations[o] = true
 	}
 	return &MaskStarter{
 		operations: operations,

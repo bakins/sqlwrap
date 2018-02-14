@@ -44,7 +44,7 @@ func (o *recorderOperation) Finish(err error) {
 func TestDriver(t *testing.T) {
 	tests := []struct {
 		name     string
-		mask     []SQLOperation
+		exclude  []SQLOperation
 		expected []SQLOperation
 	}{
 		{
@@ -53,7 +53,7 @@ func TestDriver(t *testing.T) {
 		},
 		{
 			name:     "mask next",
-			mask:     []SQLOperation{OperationNext},
+			exclude:  []SQLOperation{OperationNext},
 			expected: []SQLOperation{OperationBeginTx, OperationExecContext, OperationExecContext, OperationQueryContext, OperationCommit},
 		},
 	}
@@ -68,7 +68,7 @@ func TestDriver(t *testing.T) {
 
 			r := &testRecorder{}
 
-			db, err := OpenWrapped("sqlmock", test.name, OperationMask(r, test.mask...))
+			db, err := OpenWrapped("sqlmock", test.name, OperationExclude(r, test.exclude...))
 			require.NoError(t, err)
 			require.NotNil(t, db)
 			defer db.Close()

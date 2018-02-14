@@ -43,7 +43,7 @@ func getDriverName(driver string, operationStarters ...OperationStarter) (string
 // Open will wrap the driver and call sql.Open
 // The wrapping is handled internally.
 // The driver must have been registered by a call to Register
-func OpenWrapped(driver string, dsn string, operationStarters ...OperationStarter) (*sql.DB, error) {
+func Open(driver string, dsn string, operationStarters ...OperationStarter) (*sql.DB, error) {
 	name, err := getDriverName(driver, operationStarters...)
 	if err != nil {
 		return nil, err
