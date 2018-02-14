@@ -31,7 +31,7 @@ func getDriverName(driver string, operationStarters ...OperationStarter) (string
 	defer driversMu.Unlock()
 	d, ok := drivers[driver]
 	if !ok {
-		return "", fmt.Errorf("driver %s is not registered", driver)
+		return "", fmt.Errorf("sql: unknown driver %q (forgotten Register?)", driver)
 	}
 	name := fmt.Sprintf("sqlwrap-%s-%d", driver, driverCount)
 	driverCount++
@@ -40,8 +40,9 @@ func getDriverName(driver string, operationStarters ...OperationStarter) (string
 	return name, nil
 }
 
-// OpenWrapped will wrap the driver and open.
-// The name of the wrapped driver is handled internally.
+// Open will wrap the driver and call sql.Open
+// The wrapping is handled internally.
+// The driver must have been registered by a call to Register
 func OpenWrapped(driver string, dsn string, operationStarters ...OperationStarter) (*sql.DB, error) {
 	name, err := getDriverName(driver, operationStarters...)
 	if err != nil {
