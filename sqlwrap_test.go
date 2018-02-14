@@ -45,44 +45,81 @@ func (o *recorderOperation) Finish(err error) {
 }
 
 func TestDriver(t *testing.T) {
-	r := &testRecorder{}
+	tests := []struct {
+		name     string
+		mask     []SQLOperation
+		expected []SQLOperation
+	}{
+		{
+			name:     "record all",
+			expected: []SQLOperation{OperationBeginTx, OperationExecContext, OperationExecContext, OperationQueryContext, OperationNext, OperationNext, OperationNext, OperationCommit},
+		},
+		{
+			name:     "mask next",
+			mask:     []SQLOperation{OperationNext},
+			expected: []SQLOperation{OperationBeginTx, OperationExecContext, OperationExecContext, OperationQueryContext, OperationCommit},
+		},
+	}
 
-	w := WrapDriver(sqlmockDriver, r)
-	require.NotNil(t, w)
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			r := &testRecorder{}
 
-	sql.Register("wrapped", w)
+			w := WrapDriver(sqlmockDriver, OperationMask(r, test.mask...))
+			require.NotNil(t, w)
 
-	_, mock, err := sqlmock.NewWithDSN("testdb")
-	require.NoError(t, err)
+			sql.Register(test.name, w)
 
-	db, err := sql.Open("wrapped", "testdb")
-	require.NoError(t, err)
-	require.NotNil(t, db)
-	require.Equal(t, w, db.Driver())
+			d, mock, err := sqlmock.NewWithDSN(test.name)
+			require.NoError(t, err)
+			defer d.Close()
 
-	mock.ExpectBegin()
-	mock.ExpectExec("UPDATE products").WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectExec("INSERT INTO product_viewers").WithArgs(2, 3).WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
+			db, err := sql.Open(test.name, test.name)
+			require.NoError(t, err)
+			require.NotNil(t, db)
+			require.Equal(t, w, db.Driver())
+			defer db.Close()
 
-	ctx := context.Background()
+			mock.ExpectBegin()
+			mock.ExpectExec("UPDATE products").WillReturnResult(sqlmock.NewResult(1, 1))
+			mock.ExpectExec("INSERT INTO product_viewers").WithArgs(2, 3).WillReturnResult(sqlmock.NewResult(1, 1))
+			rows := sqlmock.NewRows([]string{"id", "title"}).AddRow(1, "one").AddRow(2, "two")
+			mock.ExpectQuery("SELECT").WillReturnRows(rows)
+			mock.ExpectCommit()
 
-	tx, err := db.BeginTx(ctx, nil)
-	require.NoError(t, err)
-	require.NotNil(t, tx)
+			ctx := context.Background()
 
-	_, err = tx.ExecContext(ctx, "UPDATE products")
-	require.NoError(t, err)
+			tx, err := db.BeginTx(ctx, nil)
+			require.NoError(t, err)
+			require.NotNil(t, tx)
 
-	_, err = tx.ExecContext(ctx, "INSERT INTO product_viewers", 2, 3)
-	require.NoError(t, err)
+			_, err = tx.ExecContext(ctx, "UPDATE products")
+			require.NoError(t, err)
 
-	err = tx.Commit()
-	require.NoError(t, err)
+			_, err = tx.ExecContext(ctx, "INSERT INTO product_viewers", 2, 3)
+			require.NoError(t, err)
 
-	require.Equal(t, 4, len(r.operations))
+			rs, err := db.QueryContext(ctx, "SELECT")
+			require.NoError(t, err)
+			require.NotNil(t, rs)
+			defer rs.Close()
 
-	for i, o := range []SQLOperation{OperationBeginTx, OperationExecContext, OperationExecContext, OperationCommit} {
-		require.Equal(t, o, r.operations[i].operation)
+			for rs.Next() {
+				var id int
+				var title string
+				err = rs.Scan(&id, &title)
+				require.NoError(t, err)
+			}
+
+			err = tx.Commit()
+			require.NoError(t, err)
+
+			require.Equal(t, len(test.expected), len(r.operations))
+
+			for i := range test.expected {
+				require.Equal(t, test.expected[i], r.operations[i].operation)
+			}
+		})
 	}
 }
