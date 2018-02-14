@@ -159,7 +159,7 @@ func (c *wrappedConn) Exec(query string, args []driver.Value) (driver.Result, er
 
 func (c *wrappedConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	if x, ok := c.parent.(driver.ExecerContext); ok {
-		o, ctx := c.driver.startOperation(ctx, OperationPrepareContext, query)
+		o, ctx := c.driver.startOperation(ctx, OperationExecContext, query)
 		res, err := x.ExecContext(ctx, query, args)
 		o.finish(err)
 		if err != nil {
